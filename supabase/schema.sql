@@ -1,8 +1,12 @@
--- ACTIVATE MY LIFE: PHASE 1 SUPABASE SCHEMA & AUTO-PROFILE TRIGGER
+-- ACTIVATE MY LIFE: PHASE 1 & 2 SUPABASE SCHEMA & RLS POLICIES
 -- Copy & run this entire script in your Supabase SQL Editor
 
 -- 1. ENUM FOR USER ROLES
-CREATE TYPE user_role AS ENUM ('user', 'admin');
+DO $$ BEGIN
+  CREATE TYPE user_role AS ENUM ('user', 'admin');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
 
 -- 2. PROFILES TABLE
 CREATE TABLE IF NOT EXISTS public.profiles (
@@ -22,24 +26,30 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   completed_count INTEGER DEFAULT 0 NOT NULL
 );
 
--- Enable RLS on Profiles
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
--- Profile Policies
+DROP POLICY IF EXISTS "Public profiles are viewable by authenticated users" ON public.profiles;
 CREATE POLICY "Public profiles are viewable by authenticated users" 
 ON public.profiles FOR SELECT 
 TO authenticated 
 USING (true);
 
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
 CREATE POLICY "Users can update their own profile" 
 ON public.profiles FOR UPDATE 
 TO authenticated 
 USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
+CREATE POLICY "Users can insert their own profile" 
+ON public.profiles FOR INSERT 
+TO authenticated 
+WITH CHECK (auth.uid() = id);
+
 -- 3. USER STATS TABLE
 CREATE TABLE IF NOT EXISTS public.user_stats (
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE PRIMARY KEY,
-  current_day INTEGER DEFAULT 0 NOT NULL,
+  current_day INTEGER DEFAULT 1 NOT NULL,
   total_points INTEGER DEFAULT 0 NOT NULL,
   current_streak INTEGER DEFAULT 0 NOT NULL,
   longest_streak INTEGER DEFAULT 0 NOT NULL,
@@ -50,15 +60,23 @@ CREATE TABLE IF NOT EXISTS public.user_stats (
 
 ALTER TABLE public.user_stats ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "User stats are viewable by authenticated users" ON public.user_stats;
 CREATE POLICY "User stats are viewable by authenticated users" 
 ON public.user_stats FOR SELECT 
 TO authenticated 
 USING (true);
 
+DROP POLICY IF EXISTS "Users can update their own stats" ON public.user_stats;
 CREATE POLICY "Users can update their own stats" 
 ON public.user_stats FOR UPDATE 
 TO authenticated 
 USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can insert their own stats" ON public.user_stats;
+CREATE POLICY "Users can insert their own stats" 
+ON public.user_stats FOR INSERT 
+TO authenticated 
+WITH CHECK (auth.uid() = user_id);
 
 -- 4. CHALLENGES TABLE
 CREATE TABLE IF NOT EXISTS public.challenges (
@@ -72,6 +90,7 @@ CREATE TABLE IF NOT EXISTS public.challenges (
 
 ALTER TABLE public.challenges ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Challenges viewable by all authenticated users" ON public.challenges;
 CREATE POLICY "Challenges viewable by all authenticated users" 
 ON public.challenges FOR SELECT 
 TO authenticated 
@@ -95,6 +114,7 @@ CREATE TABLE IF NOT EXISTS public.challenge_days (
 
 ALTER TABLE public.challenge_days ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Challenge days viewable by all authenticated users" ON public.challenge_days;
 CREATE POLICY "Challenge days viewable by all authenticated users" 
 ON public.challenge_days FOR SELECT 
 TO authenticated 
@@ -104,7 +124,7 @@ USING (true);
 CREATE TABLE IF NOT EXISTS public.daily_submissions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
-  day_id UUID REFERENCES public.challenge_days(id) ON DELETE CASCADE NOT NULL,
+  day_id UUID DEFAULT '00000000-0000-0000-0000-000000000000' NOT NULL,
   day_number INTEGER NOT NULL,
   action_completed BOOLEAN DEFAULT false NOT NULL,
   reflection_text TEXT,
@@ -115,11 +135,13 @@ CREATE TABLE IF NOT EXISTS public.daily_submissions (
 
 ALTER TABLE public.daily_submissions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view their own submissions" ON public.daily_submissions;
 CREATE POLICY "Users can view their own submissions" 
 ON public.daily_submissions FOR SELECT 
 TO authenticated 
 USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own submissions" ON public.daily_submissions;
 CREATE POLICY "Users can insert their own submissions" 
 ON public.daily_submissions FOR INSERT 
 TO authenticated 
@@ -136,10 +158,17 @@ CREATE TABLE IF NOT EXISTS public.points_transactions (
 
 ALTER TABLE public.points_transactions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view their own transactions" ON public.points_transactions;
 CREATE POLICY "Users can view their own transactions" 
 ON public.points_transactions FOR SELECT 
 TO authenticated 
 USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can insert their own transactions" ON public.points_transactions;
+CREATE POLICY "Users can insert their own transactions" 
+ON public.points_transactions FOR INSERT 
+TO authenticated 
+WITH CHECK (auth.uid() = user_id);
 
 -- 8. BADGES TABLE
 CREATE TABLE IF NOT EXISTS public.badges (
@@ -153,6 +182,7 @@ CREATE TABLE IF NOT EXISTS public.badges (
 
 ALTER TABLE public.badges ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Badges viewable by authenticated users" ON public.badges;
 CREATE POLICY "Badges viewable by authenticated users" 
 ON public.badges FOR SELECT 
 TO authenticated 
@@ -169,6 +199,7 @@ CREATE TABLE IF NOT EXISTS public.user_badges (
 
 ALTER TABLE public.user_badges ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "User badges viewable by authenticated users" ON public.user_badges;
 CREATE POLICY "User badges viewable by authenticated users" 
 ON public.user_badges FOR SELECT 
 TO authenticated 
@@ -186,11 +217,13 @@ CREATE TABLE IF NOT EXISTS public.community_posts (
 
 ALTER TABLE public.community_posts ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Community posts viewable by authenticated users" ON public.community_posts;
 CREATE POLICY "Community posts viewable by authenticated users" 
 ON public.community_posts FOR SELECT 
 TO authenticated 
 USING (true);
 
+DROP POLICY IF EXISTS "Users can insert community posts" ON public.community_posts;
 CREATE POLICY "Users can insert community posts" 
 ON public.community_posts FOR INSERT 
 TO authenticated 
@@ -208,12 +241,13 @@ CREATE TABLE IF NOT EXISTS public.post_reactions (
 
 ALTER TABLE public.post_reactions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Post reactions viewable by authenticated users" ON public.post_reactions;
 CREATE POLICY "Post reactions viewable by authenticated users" 
 ON public.post_reactions FOR SELECT 
 TO authenticated 
 USING (true);
 
--- 12. AUTOMATIC PROFILE CREATION TRIGGER ON USER SIGNUP
+-- 12. AUTOMATIC PROFILE & STATS CREATION TRIGGER
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -223,16 +257,17 @@ BEGIN
     COALESCE(NEW.raw_user_meta_data->>'full_name', 'Activation User'),
     COALESCE(NEW.raw_user_meta_data->>'username', CONCAT('user_', SUBSTRING(NEW.id::text, 1, 8))),
     'user'
-  );
+  )
+  ON CONFLICT (id) DO NOTHING;
 
-  INSERT INTO public.user_stats (user_id)
-  VALUES (NEW.id);
+  INSERT INTO public.user_stats (user_id, current_day)
+  VALUES (NEW.id, 1)
+  ON CONFLICT (user_id) DO NOTHING;
 
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Trigger definition
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 
 CREATE TRIGGER on_auth_user_created
