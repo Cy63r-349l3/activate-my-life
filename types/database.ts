@@ -6,7 +6,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-export interface Database {
+export type Database = {
   public: {
     Tables: {
       profiles: {
@@ -58,6 +58,40 @@ export interface Database {
           rank?: number | null;
           completed_count?: number;
         };
+        Relationships: [];
+      };
+      user_stats: {
+        Row: {
+          user_id: string;
+          current_day: number;
+          total_points: number;
+          current_streak: number;
+          longest_streak: number;
+          completed_days: number;
+          last_submission_date: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          current_day?: number;
+          total_points?: number;
+          current_streak?: number;
+          longest_streak?: number;
+          completed_days?: number;
+          last_submission_date?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          current_day?: number;
+          total_points?: number;
+          current_streak?: number;
+          longest_streak?: number;
+          completed_days?: number;
+          last_submission_date?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
       challenges: {
         Row: {
@@ -84,6 +118,7 @@ export interface Database {
           total_days?: number;
           is_active?: boolean;
         };
+        Relationships: [];
       };
       challenge_days: {
         Row: {
@@ -125,6 +160,7 @@ export interface Database {
           points?: number;
           created_at?: string;
         };
+        Relationships: [];
       };
       daily_submissions: {
         Row: {
@@ -157,6 +193,7 @@ export interface Database {
           points_earned?: number;
           submitted_at?: string;
         };
+        Relationships: [];
       };
       points_transactions: {
         Row: {
@@ -180,38 +217,7 @@ export interface Database {
           reason?: string;
           created_at?: string;
         };
-      };
-      user_stats: {
-        Row: {
-          user_id: string;
-          current_day: number;
-          total_points: number;
-          current_streak: number;
-          longest_streak: number;
-          completed_days: number;
-          last_submission_date: string | null;
-          updated_at: string;
-        };
-        Insert: {
-          user_id: string;
-          current_day?: number;
-          total_points?: number;
-          current_streak?: number;
-          longest_streak?: number;
-          completed_days?: number;
-          last_submission_date?: string | null;
-          updated_at?: string;
-        };
-        Update: {
-          user_id?: string;
-          current_day?: number;
-          total_points?: number;
-          current_streak?: number;
-          longest_streak?: number;
-          completed_days?: number;
-          last_submission_date?: string | null;
-          updated_at?: string;
-        };
+        Relationships: [];
       };
       badges: {
         Row: {
@@ -238,6 +244,7 @@ export interface Database {
           category?: string;
           created_at?: string;
         };
+        Relationships: [];
       };
       user_badges: {
         Row: {
@@ -258,6 +265,7 @@ export interface Database {
           badge_id?: string;
           earned_at?: string;
         };
+        Relationships: [];
       };
       community_posts: {
         Row: {
@@ -284,6 +292,7 @@ export interface Database {
           likes_count?: number;
           created_at?: string;
         };
+        Relationships: [];
       };
       post_reactions: {
         Row: {
@@ -307,6 +316,7 @@ export interface Database {
           reaction_type?: string;
           created_at?: string;
         };
+        Relationships: [];
       };
     };
     Views: {
@@ -318,8 +328,11 @@ export interface Database {
     Enums: {
       user_role: 'user' | 'admin';
     };
+    CompositeTypes: {
+      [_ in never]: never;
+    };
   };
-}
+};
 
 export type Profile = Database['public']['Tables']['profiles']['Row'];
 export type ProfileUpdate = Database['public']['Tables']['profiles']['Update'];
