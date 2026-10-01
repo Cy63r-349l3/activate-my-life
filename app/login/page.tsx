@@ -2,13 +2,12 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Sparkles, ArrowRight, AlertCircle, ShieldCheck } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { ButtonLoader, PageLoader } from '@/components/ui/Loading';
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   const [email, setEmail] = useState('');
@@ -18,8 +17,11 @@ function LoginForm() {
 
   useEffect(() => {
     const redirectedFrom = searchParams.get('redirectedFrom');
+    const authError = searchParams.get('error');
     if (redirectedFrom) {
       setError('Please sign in to access that page.');
+    } else if (authError === 'auth_callback_failed') {
+      setError('Email verification or login link expired. Please try signing in again.');
     }
   }, [searchParams]);
 
@@ -42,16 +44,25 @@ function LoginForm() {
       });
 
       if (authError) {
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[Login Debug Error]:', authError);
+        }
         setError(authError.message);
         setLoading(false);
         return;
       }
 
-      if (data.user) {
-        router.push('/dashboard');
-        router.refresh();
+      if (data.session) {
+        // Perform hard navigation so browser sends newly set cookies to server routes
+        window.location.href = '/dashboard';
+      } else {
+        setError('Authentication succeeded but session could not be established. Please try again.');
+        setLoading(false);
       }
     } catch (err: any) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[Login Exception]:', err);
+      }
       setError(err?.message || 'An unexpected error occurred during login.');
       setLoading(false);
     }

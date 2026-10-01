@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Sparkles, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Sparkles, ArrowRight, ShieldCheck, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { ButtonLoader } from '@/components/ui/Loading';
 
@@ -17,10 +17,12 @@ export default function SignupPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmationNotice, setConfirmationNotice] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setConfirmationNotice(null);
 
     // Client side validation
     if (!fullName.trim()) {
@@ -61,10 +63,13 @@ export default function SignupPage() {
 
     try {
       const supabase = createClient();
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      
       const { data, error: authError } = await supabase.auth.signUp({
         email: email.trim(),
         password: password,
         options: {
+          emailRedirectTo: `${origin}/auth/callback`,
           data: {
             full_name: fullName.trim(),
             username: trimmedUsername,
@@ -73,16 +78,37 @@ export default function SignupPage() {
       });
 
       if (authError) {
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[Signup Debug Error]:', authError);
+        }
         setError(authError.message);
         setLoading(false);
         return;
       }
 
+      // If a session is returned immediately (email confirmation disabled/auto-confirmed)
+      if (data.session) {
+        window.location.href = '/dashboard';
+        return;
+      }
+
+      // If user created but session is null (email confirmation enabled)
       if (data.user) {
-        router.push('/dashboard');
-        router.refresh();
+        if (data.user.identities && data.user.identities.length === 0) {
+          setError('An account with this email address already exists. Please sign in instead.');
+          setLoading(false);
+          return;
+        }
+
+        setConfirmationNotice(
+          'Account registered successfully! A confirmation email has been sent to your inbox. Please verify your email before signing in.'
+        );
+        setLoading(false);
       }
     } catch (err: any) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[Signup Exception]:', err);
+      }
       setError(err?.message || 'An unexpected error occurred during signup.');
       setLoading(false);
     }
@@ -113,102 +139,125 @@ export default function SignupPage() {
 
         {/* Signup Form Card */}
         <div className="bg-[#121216] border border-zinc-800/90 rounded-2xl p-6 md:p-8 shadow-2xl backdrop-blur-xl">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="p-3.5 rounded-xl bg-red-950/60 border border-red-500/40 text-red-300 text-xs flex items-start gap-2.5">
-                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                <span>{error}</span>
+          {confirmationNotice ? (
+            <div className="text-center space-y-5 py-4">
+              <div className="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400">
+                <CheckCircle2 className="w-7 h-7" />
               </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-medium uppercase tracking-wider text-zinc-400 mb-1.5">
-                Full Name
-              </label>
-              <input
-                type="text"
-                required
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Marcus Vance"
-                className="w-full bg-[#18181f] border border-zinc-800 focus:border-orange-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium uppercase tracking-wider text-zinc-400 mb-1.5">
-                Username
-              </label>
-              <input
-                type="text"
-                required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="marcus_activates"
-                className="w-full bg-[#18181f] border border-zinc-800 focus:border-orange-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium uppercase tracking-wider text-zinc-400 mb-1.5">
-                Email Address
-              </label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="marcus@example.com"
-                className="w-full bg-[#18181f] border border-zinc-800 focus:border-orange-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium uppercase tracking-wider text-zinc-400 mb-1.5">
-                Password
-              </label>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full bg-[#18181f] border border-zinc-800 focus:border-orange-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium uppercase tracking-wider text-zinc-400 mb-1.5">
-                Confirm Password
-              </label>
-              <input
-                type="password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full bg-[#18181f] border border-zinc-800 focus:border-orange-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full mt-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-semibold py-3 px-4 rounded-xl shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-            >
-              {loading ? (
-                <>
-                  <ButtonLoader />
-                  <span>Creating Account...</span>
-                </>
-              ) : (
-                <>
-                  <span>Begin Your Activation</span>
+              <h2 className="text-xl font-bold text-white uppercase tracking-tight">
+                Account Registered
+              </h2>
+              <p className="text-xs text-zinc-300 leading-relaxed">
+                {confirmationNotice}
+              </p>
+              <div className="pt-2">
+                <Link
+                  href="/login"
+                  className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-semibold py-3 px-4 rounded-xl shadow-lg shadow-orange-500/20 text-xs uppercase tracking-wider transition-all"
+                >
+                  <span>Proceed to Sign In</span>
                   <ArrowRight className="w-4 h-4" />
-                </>
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {error && (
+                <div className="p-3.5 rounded-xl bg-red-950/60 border border-red-500/40 text-red-300 text-xs flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
               )}
-            </button>
-          </form>
+
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-wider text-zinc-400 mb-1.5">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Marcus Vance"
+                  className="w-full bg-[#18181f] border border-zinc-800 focus:border-orange-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-wider text-zinc-400 mb-1.5">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="marcus_activates"
+                  className="w-full bg-[#18181f] border border-zinc-800 focus:border-orange-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-wider text-zinc-400 mb-1.5">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="marcus@example.com"
+                  className="w-full bg-[#18181f] border border-zinc-800 focus:border-orange-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-wider text-zinc-400 mb-1.5">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-[#18181f] border border-zinc-800 focus:border-orange-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-wider text-zinc-400 mb-1.5">
+                  Confirm Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-[#18181f] border border-zinc-800 focus:border-orange-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full mt-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-semibold py-3 px-4 rounded-xl shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+              >
+                {loading ? (
+                  <>
+                    <ButtonLoader />
+                    <span>Creating Account...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Begin Your Activation</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
+          )}
 
           <div className="mt-6 pt-6 border-t border-zinc-800/80 text-center text-xs text-zinc-400">
             Already have an active profile?{' '}

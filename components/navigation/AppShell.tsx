@@ -55,8 +55,7 @@ export default function AppShell({ children, userProfile }: AppShellProps) {
       setIsLoggingOut(true);
       const supabase = createClient();
       await supabase.auth.signOut();
-      router.push('/login');
-      router.refresh();
+      window.location.href = '/login';
     } catch (err) {
       console.error('Logout error:', err);
       setIsLoggingOut(false);
