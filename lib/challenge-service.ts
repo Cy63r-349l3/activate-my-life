@@ -60,10 +60,10 @@ export interface UserChallengeState {
 export async function getUserChallengeState(userId: string): Promise<UserChallengeState> {
   const supabase = await createClient();
 
-  // 1. Get or initialize user_stats
+  // 1. Get or initialize user_stats (only use columns that exist in the live DB)
   let { data: stats } = await supabase
     .from('user_stats')
-    .select('*')
+    .select('user_id, total_points, current_streak, longest_streak, updated_at')
     .eq('user_id', userId)
     .single();
 
@@ -72,13 +72,12 @@ export async function getUserChallengeState(userId: string): Promise<UserChallen
       .from('user_stats')
       .insert({
         user_id: userId,
-        current_day: 1,
+        challenge_id: '00000000-0000-0000-0000-000000000000',
         total_points: 0,
         current_streak: 0,
         longest_streak: 0,
-        completed_days: 0,
-      })
-      .select('*')
+      } as any)
+      .select('user_id, total_points, current_streak, longest_streak, updated_at')
       .single();
     stats = newStats;
   }
@@ -190,15 +189,20 @@ export async function submitDailyChallengeServer(
   const reflectionData = JSON.stringify(payload);
   const dummyDayId = '00000000-0000-0000-0000-000000000000'; // fallback placeholder uuid if challenge_days table is not linked directly
 
+  const todayDateStr = new Date().toISOString().split('T')[0];
   const { error: subError } = await supabase.from('daily_submissions').insert({
     user_id: userId,
+    challenge_id: dummyDayId,
+    challenge_day_id: dummyDayId,
     day_id: dummyDayId,
     day_number: activeDayNumber,
     action_completed: true,
     reflection_text: reflectionData,
     points_earned: pointsEarned,
+    activity_date: todayDateStr,
     submitted_at: new Date().toISOString(),
-  });
+    created_at: new Date().toISOString(),
+  } as any);
 
   if (subError) {
     console.error('Failed to insert daily submission:', subError);
@@ -217,33 +221,29 @@ export async function submitDailyChallengeServer(
     reason: `Completed Day ${activeDayNumber} Activation`,
   });
 
-  // 5. Update user_stats & calculate streak
+  // 5. Update user_stats & calculate streak (only columns that exist in live DB)
   const { data: currentStats } = await supabase
     .from('user_stats')
-    .select('*')
+    .select('user_id, total_points, current_streak, longest_streak, updated_at')
     .eq('user_id', userId)
     .single();
 
-  const todayStr = new Date().toISOString().split('T')[0];
   let newStreak = (currentStats?.current_streak || 0) + 1;
-  const lastDateStr = currentStats?.last_submission_date;
 
-  if (lastDateStr) {
-    const lastDate = new Date(lastDateStr);
-    const todayDate = new Date(todayStr);
-    const diffTime = Math.abs(todayDate.getTime() - lastDate.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
+  // Use updated_at to detect if last submission was yesterday or earlier to break streak
+  if (currentStats?.updated_at) {
+    const lastDate = new Date(currentStats.updated_at);
+    const todayDate = new Date();
+    const diffDays = Math.floor(
+      (todayDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24)
+    );
     if (diffDays > 1) {
-      // Missed a day
       newStreak = 1;
     }
   }
 
   const newLongestStreak = Math.max(currentStats?.longest_streak || 0, newStreak);
   const newTotalPoints = (currentStats?.total_points || 0) + pointsEarned;
-  const newCompletedDays = (currentStats?.completed_days || 0) + 1;
-  const newCurrentDay = Math.min(30, activeDayNumber + 1);
 
   await supabase
     .from('user_stats')
@@ -251,9 +251,6 @@ export async function submitDailyChallengeServer(
       total_points: newTotalPoints,
       current_streak: newStreak,
       longest_streak: newLongestStreak,
-      completed_days: newCompletedDays,
-      current_day: newCurrentDay,
-      last_submission_date: todayStr,
       updated_at: new Date().toISOString(),
     })
     .eq('user_id', userId);
@@ -264,7 +261,7 @@ export async function submitDailyChallengeServer(
     .update({
       points: newTotalPoints,
       streak: newStreak,
-      completed_count: newCompletedDays,
+      completed_count: state.completedDaysCount + 1,
       updated_at: new Date().toISOString(),
     })
     .eq('id', userId);
