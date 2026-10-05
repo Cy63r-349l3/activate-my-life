@@ -126,13 +126,15 @@ export default function ChallengeInteractiveForm({
 
       const res = await submitDailyChallengeAction(payload);
 
+      console.log('[Challenge Submit Response]', res);
+
       if (!res.success) {
         setError(res.error || res.message || 'Failed to submit challenge.');
         setSubmitting(false);
         return;
       }
 
-      setCongratsData({ points: res.pointsEarned || 0, day: dayNumber });
+      setCongratsData({ points: res.pointsEarned ?? 0, day: dayNumber });
       setShowCongratsModal(true);
       setSubmitting(false);
     } catch (err: any) {

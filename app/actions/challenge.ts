@@ -27,8 +27,11 @@ export async function submitDailyChallengeAction(payload: SubmissionPayload): Pr
   try {
     const result = await submitDailyChallengeServer(user.id, payload);
     return {
-      ...result,
-      error: result.message,
+      success: result.success,
+      pointsEarned: result.pointsEarned,
+      activeDayNumber: result.activeDayNumber,
+      message: result.message,
+      error: result.success ? undefined : result.message,
     };
   } catch (err: any) {
     console.error('Error submitting daily challenge:', err);
