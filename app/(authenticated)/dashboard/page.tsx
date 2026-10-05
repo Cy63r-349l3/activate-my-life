@@ -44,6 +44,8 @@ export default async function DashboardPage() {
   const completedCount = state.completedDaysCount;
   const progressPercentage = state.progressPercentage;
   const isTodayCompleted = state.isTodayCompleted;
+  const isLocked = state.isLocked;
+  const lockedUntil = state.lockedUntil;
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -73,7 +75,7 @@ export default async function DashboardPage() {
             href="/challenge"
             className="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-orange-500/20 flex items-center gap-2 transition-all hover:scale-[1.02]"
           >
-            <span>{isTodayCompleted ? 'View Today’s Challenge' : 'Continue Today’s Challenge'}</span>
+            <span>{isTodayCompleted ? 'View Today’s Challenge' : isLocked ? 'View Next Challenge' : 'Continue Today’s Challenge'}</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
@@ -192,10 +194,12 @@ export default async function DashboardPage() {
             className={`px-3 py-1 rounded-full text-xs font-mono font-bold uppercase ${
               isTodayCompleted
                 ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-500/30'
+                : isLocked
+                ? 'bg-zinc-900 text-zinc-400 border border-zinc-700'
                 : 'bg-orange-950/60 text-orange-400 border border-orange-500/30'
             }`}
           >
-            {isTodayCompleted ? 'Completed Today' : 'Action Pending'}
+            {isTodayCompleted ? 'Completed Today' : isLocked ? 'Locked' : 'Action Pending'}
           </span>
         </div>
 
@@ -218,6 +222,8 @@ export default async function DashboardPage() {
             <div className="text-xs text-zinc-400">
               {isTodayCompleted
                 ? 'You have submitted your official review for today. Review your answers or keep building your momentum!'
+                : isLocked
+                ? `Challenge locked until ${lockedUntil ? new Date(lockedUntil).toLocaleString() : 'tomorrow'}.`
                 : 'Complete your Morning Plan and Evening Accountability Review to earn up to 100 PTS.'}
             </div>
 
@@ -225,7 +231,7 @@ export default async function DashboardPage() {
               href="/challenge"
               className="px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 transition-all shrink-0"
             >
-              <span>{isTodayCompleted ? 'View Day Review' : 'Open Day ' + currentDay + ' Challenge'}</span>
+              <span>{isTodayCompleted ? 'View Day Review' : isLocked ? 'Check Status' : 'Open Day ' + currentDay + ' Challenge'}</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>

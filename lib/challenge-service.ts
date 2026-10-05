@@ -55,6 +55,8 @@ export interface UserChallengeState {
   longestStreak: number;
   completedDaysCount: number;
   progressPercentage: number;
+  isLocked: boolean;
+  lockedUntil: string | null;
 }
 
 export async function getUserChallengeState(userId: string): Promise<UserChallengeState> {
@@ -106,6 +108,24 @@ export async function getUserChallengeState(userId: string): Promise<UserChallen
     activeDayNumber = 30;
   }
 
+  let isLocked = false;
+  let lockedUntil = null;
+  
+  // Find the most recent submission
+  const lastSubmission = completedSubmissions.length > 0 
+    ? completedSubmissions[completedSubmissions.length - 1]
+    : null;
+
+  if (lastSubmission && !isTodayCompleted) {
+    const lastSubmissionTime = new Date(lastSubmission.submitted_at).getTime();
+    const now = new Date().getTime();
+    const twentyFourHours = 24 * 60 * 60 * 1000;
+    if (now - lastSubmissionTime < twentyFourHours) {
+      isLocked = true;
+      lockedUntil = new Date(lastSubmissionTime + twentyFourHours).toISOString();
+    }
+  }
+
   const dayDefinition = getDayDefinition(activeDayNumber);
   const totalPoints = stats?.total_points ?? 0;
   const currentStreak = stats?.current_streak ?? 0;
@@ -125,6 +145,8 @@ export async function getUserChallengeState(userId: string): Promise<UserChallen
     longestStreak,
     completedDaysCount,
     progressPercentage,
+    isLocked,
+    lockedUntil,
   };
 }
 
@@ -235,6 +257,7 @@ export async function submitDailyChallengeServer(
     .single();
 
   let newStreak = (currentStats?.current_streak || 0) + 1;
+  let penaltyPoints = 0;
 
   // Use updated_at to detect if last submission was yesterday or earlier to break streak
   if (currentStats?.updated_at) {
@@ -245,11 +268,20 @@ export async function submitDailyChallengeServer(
     );
     if (diffDays > 1) {
       newStreak = 1;
+      penaltyPoints = 10;
     }
   }
 
+  if (penaltyPoints > 0) {
+    await supabase.from('points_transactions').insert({
+      user_id: userId,
+      amount: -penaltyPoints,
+      reason: `Missed a day before Day ${activeDayNumber} Activation`,
+    });
+  }
+
   const newLongestStreak = Math.max(currentStats?.longest_streak || 0, newStreak);
-  const newTotalPoints = (currentStats?.total_points || 0) + pointsEarned;
+  const newTotalPoints = Math.max(0, (currentStats?.total_points || 0) + pointsEarned - penaltyPoints);
 
   await supabase
     .from('user_stats')

@@ -29,6 +29,8 @@ export default function ChallengeInteractiveForm({
   const [activeTab, setActiveTab] = useState<'morning' | 'evening' | 'final'>('morning');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showCongratsModal, setShowCongratsModal] = useState(false);
+  const [congratsData, setCongratsData] = useState<{ points: number; day: number } | null>(null);
 
   // Morning Plan States
   const [priority1, setPriority1] = useState('');
@@ -130,9 +132,9 @@ export default function ChallengeInteractiveForm({
         return;
       }
 
-      // Refresh to display completed read-only view
-      router.refresh();
-      window.location.reload();
+      setCongratsData({ points: res.pointsEarned || 0, day: dayNumber });
+      setShowCongratsModal(true);
+      setSubmitting(false);
     } catch (err: any) {
       setError(err?.message || 'An unexpected submission error occurred.');
       setSubmitting(false);
@@ -587,6 +589,39 @@ export default function ChallengeInteractiveForm({
           </button>
         </div>
       </form>
+
+      {/* CONGRATULATIONS MODAL */}
+      {showCongratsModal && congratsData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-[#181820] border border-orange-500/50 rounded-2xl p-8 max-w-md w-full text-center space-y-6 shadow-2xl shadow-orange-500/20">
+            <div className="mx-auto w-20 h-20 bg-orange-500/20 text-orange-400 rounded-full flex items-center justify-center">
+              <Award className="w-10 h-10" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-extrabold text-white uppercase tracking-tight">
+                Congratulations!
+              </h2>
+              <p className="text-zinc-400 mt-2">
+                You successfully completed Day {congratsData.day}.
+              </p>
+              <p className="text-lg font-bold text-orange-400 mt-4 font-mono">
+                +{congratsData.points} PTS Earned
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowCongratsModal(false);
+                router.refresh();
+                window.location.reload();
+              }}
+              className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all"
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

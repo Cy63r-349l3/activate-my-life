@@ -42,6 +42,8 @@ export default async function ChallengePage() {
     currentStreak,
     completedDaysCount,
     progressPercentage,
+    isLocked,
+    lockedUntil,
   } = state;
 
   let completionStatusBadge = 'IN_PROGRESS';
@@ -162,6 +164,16 @@ export default async function ChallengePage() {
           submittedAt={todaySubmission.submitted_at}
           reflectionText={todaySubmission.reflection_text}
         />
+      ) : isLocked ? (
+        <div className="bg-[#121216] border border-zinc-800/90 rounded-2xl p-6 md:p-8 space-y-4 text-center">
+          <h2 className="text-xl font-bold text-white uppercase">Challenge Locked</h2>
+          <p className="text-zinc-400">
+            Great work! You must wait 24 hours after completing your last challenge before starting the next one.
+          </p>
+          <p className="text-orange-400 font-mono text-sm mt-2">
+            Available at: {lockedUntil ? new Date(lockedUntil).toLocaleString() : 'Soon'}
+          </p>
+        </div>
       ) : (
         <ChallengeInteractiveForm
           dayNumber={activeDayNumber}
