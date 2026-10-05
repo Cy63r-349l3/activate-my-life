@@ -1,13 +1,31 @@
 import React from 'react';
-import { Users, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
+import { createClient } from '@/lib/supabase/server';
+import { getUserChallengeState } from '@/lib/challenge-service';
+import { fetchCommunityPostsAction } from '@/app/actions/community';
+import CommunityFeed from '@/components/community/CommunityFeed';
 
-export default function CommunityPage() {
+export default async function CommunityPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let userId = 'demo-user';
+  if (user) userId = user.id;
+
+  const [posts, state] = await Promise.all([
+    fetchCommunityPostsAction(),
+    getUserChallengeState(userId),
+  ]);
+
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      <div className="pb-4 border-b border-zinc-800/80">
+    <div className="space-y-8 max-w-4xl mx-auto animate-fadeIn">
+      {/* Header */}
+      <div className="pb-6 border-b border-zinc-800/80">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-bold uppercase tracking-wider mb-2">
           <Sparkles className="w-3.5 h-3.5" />
-          <span>Social Network</span>
+          <span>Social Accountability Feed</span>
         </div>
         <h1 className="text-2xl md:text-4xl font-extrabold text-white uppercase tracking-tight">
           Activation Community
@@ -17,17 +35,8 @@ export default function CommunityPage() {
         </p>
       </div>
 
-      <div className="bg-[#121216] border border-zinc-800/90 rounded-2xl p-8 md:p-12 text-center space-y-4">
-        <div className="w-14 h-14 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mx-auto text-orange-400">
-          <Users className="w-7 h-7" />
-        </div>
-        <h2 className="text-xl font-bold text-white uppercase">
-          Phase 1 Foundation Placeholder
-        </h2>
-        <p className="text-xs md:text-sm text-zinc-400 max-w-md mx-auto leading-relaxed">
-          The community reflection feed, reactions, and encouragement posts will be launched in later phases.
-        </p>
-      </div>
+      {/* Main Community Feed */}
+      <CommunityFeed initialPosts={posts} activeDayNumber={state.activeDayNumber} />
     </div>
   );
 }
