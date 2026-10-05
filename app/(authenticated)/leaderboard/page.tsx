@@ -33,15 +33,19 @@ async function fetchLeaderboard(): Promise<{
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
     .select('id, username, full_name, avatar_url, country, points, streak, completed_count')
     .order('points', { ascending: false })
     .limit(50);
 
-  const rows: LeaderEntry[] = (data || []).map((r: any) => ({
+  if (error) {
+    console.error('[Leaderboard] Supabase query error:', error);
+  }
+
+  const allRows: LeaderEntry[] = (data || []).map((r: any) => ({
     id: r.id,
-    username: r.username || 'anonymous',
+    username: r.username && r.username.trim() !== '' ? r.username : `user_${r.id.substring(0, 5)}`,
     full_name: r.full_name || 'Activation User',
     avatar_url: r.avatar_url || null,
     country: r.country || null,
@@ -50,9 +54,12 @@ async function fetchLeaderboard(): Promise<{
     completed_count: r.completed_count ?? 0,
   }));
 
-  const byPoints = [...rows].sort((a, b) => b.points - a.points);
-  const byStreak = [...rows].sort((a, b) => b.streak - a.streak);
-  const byDays = [...rows].sort((a, b) => b.completed_count - a.completed_count);
+  // For board display: show everyone (they earned their spot by signing up)
+  const byPoints = [...allRows].sort((a, b) => b.points - a.points || b.streak - a.streak);
+  const byStreak = [...allRows].sort((a, b) => b.streak - a.streak || b.points - a.points);
+  const byDays = [...allRows].sort(
+    (a, b) => b.completed_count - a.completed_count || b.points - a.points
+  );
 
   return { byPoints, byStreak, byDays, currentUserId: user?.id ?? null };
 }
@@ -225,8 +232,9 @@ function TabPanel({
 }) {
   if (entries.length === 0) {
     return (
-      <div className="text-center py-16 text-zinc-500 text-sm">
-        No data yet. Be the first to complete a day!
+      <div className="text-center py-16 space-y-2">
+        <p className="text-zinc-400 text-sm font-semibold">No data yet!</p>
+        <p className="text-zinc-600 text-xs">Complete your first day to appear on the board.</p>
       </div>
     );
   }

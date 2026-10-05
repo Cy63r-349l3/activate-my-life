@@ -12,6 +12,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Save,
+  Trophy,
+  Upload,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Profile } from '@/types/database';
@@ -21,10 +23,14 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [computedRank, setComputedRank] = useState<number | null>(null);
+  const [totalUsers, setTotalUsers] = useState<number>(0);
 
   // Form states
   const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
   const [country, setCountry] = useState('');
   const [city, setCity] = useState('');
   const [bio, setBio] = useState('');
@@ -39,6 +45,7 @@ export default function ProfilePage() {
         } = await supabase.auth.getUser();
 
         if (user) {
+          // Load current user's profile
           const { data, error } = await supabase
             .from('profiles')
             .select('*')
@@ -48,10 +55,23 @@ export default function ProfilePage() {
           if (data) {
             setProfile(data);
             setFullName(data.full_name || '');
+            setUsername(data.username || '');
             setCountry(data.country || '');
             setCity(data.city || '');
             setBio(data.bio || '');
             setAvatarUrl(data.avatar_url || '');
+          }
+
+          // Compute rank by fetching all profiles sorted by points
+          const { data: allProfiles } = await supabase
+            .from('profiles')
+            .select('id, points, streak, completed_count')
+            .order('points', { ascending: false });
+
+          if (allProfiles) {
+            setTotalUsers(allProfiles.length);
+            const rankIdx = allProfiles.findIndex((p) => p.id === user.id);
+            setComputedRank(rankIdx >= 0 ? rankIdx + 1 : null);
           }
         }
       } catch (err) {
@@ -63,6 +83,43 @@ export default function ProfilePage() {
 
     loadProfile();
   }, []);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      setUploadingAvatar(true);
+      setMessage(null);
+      
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('You must be logged in to upload an avatar.');
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}-${Math.random()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      setAvatarUrl(publicUrl);
+      setMessage({ type: 'success', text: 'Avatar uploaded successfully! Click Save Changes to apply.' });
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error.message });
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,6 +148,7 @@ export default function ProfilePage() {
         .from('profiles')
         .update({
           full_name: fullName.trim(),
+          username: username.trim() || `user_${user.id.substring(0, 6)}`,
           country: country.trim() || null,
           city: city.trim() || null,
           bio: bio.trim() || null,
@@ -100,7 +158,11 @@ export default function ProfilePage() {
         .eq('id', user.id);
 
       if (error) {
-        setMessage({ type: 'error', text: error.message });
+        if (error.code === '23505') {
+          setMessage({ type: 'error', text: 'That username is already taken. Please choose another.' });
+        } else {
+          setMessage({ type: 'error', text: error.message });
+        }
       } else {
         setMessage({ type: 'success', text: 'Profile updated successfully!' });
         setProfile((prev) =>
@@ -108,6 +170,7 @@ export default function ProfilePage() {
             ? {
                 ...prev,
                 full_name: fullName.trim(),
+                username: username.trim() || `user_${user.id.substring(0, 6)}`,
                 country: country.trim() || null,
                 city: city.trim() || null,
                 bio: bio.trim() || null,
@@ -206,13 +269,22 @@ export default function ProfilePage() {
 
         <div className="bg-[#121216] border border-zinc-800/80 rounded-xl p-4 space-y-1">
           <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-medium">
-            <Shield className="w-3.5 h-3.5 text-orange-400" />
+            <Trophy className="w-3.5 h-3.5 text-amber-400" />
             <span>Leaderboard Rank</span>
           </div>
           <p className="text-lg font-bold text-white font-mono">
-            #{profile?.rank ?? 'Unranked'}
+            {computedRank != null ? (
+              <>
+                <span className="text-amber-400">#{computedRank}</span>
+                {totalUsers > 0 && (
+                  <span className="text-xs text-zinc-500 ml-1 font-sans">/ {totalUsers}</span>
+                )}
+              </>
+            ) : (
+              <span className="text-zinc-500">—</span>
+            )}
           </p>
-          <p className="text-[10px] text-zinc-500">System Controlled</p>
+          <p className="text-[10px] text-zinc-500">Live Computed</p>
         </div>
 
         <div className="bg-[#121216] border border-zinc-800/80 rounded-xl p-4 space-y-1">
@@ -270,13 +342,15 @@ export default function ProfilePage() {
 
             <div>
               <label className="block text-xs font-medium uppercase tracking-wider text-zinc-400 mb-1.5">
-                Username <span className="text-[10px] text-zinc-500 font-normal">(Read Only)</span>
+                Username
               </label>
               <input
                 type="text"
-                disabled
-                value={profile?.username || ''}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-500 cursor-not-allowed"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                className="w-full bg-[#18181f] border border-zinc-800 focus:border-orange-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors"
+                placeholder="choose_a_username"
               />
             </div>
 
@@ -315,15 +389,31 @@ export default function ProfilePage() {
 
           <div>
             <label className="block text-xs font-medium uppercase tracking-wider text-zinc-400 mb-1.5">
-              Avatar Image URL
+              Avatar Image
             </label>
-            <input
-              type="url"
-              value={avatarUrl}
-              onChange={(e) => setAvatarUrl(e.target.value)}
-              placeholder="https://example.com/avatar.jpg"
-              className="w-full bg-[#18181f] border border-zinc-800 focus:border-orange-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors"
-            />
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              <label className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#18181f] hover:bg-[#202028] border border-zinc-800 rounded-xl cursor-pointer text-sm text-white transition-colors shrink-0">
+                {uploadingAvatar ? <ButtonLoader /> : <Upload className="w-4 h-4 text-zinc-400" />}
+                {uploadingAvatar ? 'Uploading...' : 'Upload Image'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleAvatarUpload}
+                  disabled={uploadingAvatar}
+                />
+              </label>
+              <input
+                type="url"
+                value={avatarUrl}
+                onChange={(e) => setAvatarUrl(e.target.value)}
+                placeholder="Or paste an image URL"
+                className="w-full bg-[#18181f] border border-zinc-800 focus:border-orange-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors"
+              />
+            </div>
+            <p className="text-[10px] text-zinc-500 mt-1.5">
+              * Note: For uploads to work, you must create a public storage bucket named "avatars" in Supabase.
+            </p>
           </div>
 
           <div>
