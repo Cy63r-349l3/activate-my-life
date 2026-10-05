@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import { createClient } from '@/lib/supabase/server';
 import {
   Sparkles,
   ArrowRight,
@@ -15,7 +16,14 @@ import {
   Calendar,
 } from 'lucide-react';
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const supabase = await createClient();
+  const { data: topUsers } = await supabase
+    .from('profiles')
+    .select('id, full_name, username, points, streak')
+    .order('points', { ascending: false })
+    .limit(3);
+
   const thirtyDayThemes = [
     { day: '01', theme: 'Opportunity' },
     { day: '02', theme: 'Action' },
@@ -239,20 +247,20 @@ export default function LandingPage() {
               <span>RANK &bull; ACTIVATION MEMBER</span>
               <span>POINTS</span>
             </div>
-            {[
-              { rank: '01', name: 'Marcus Vance', points: '1,450 pts', streak: '28 Day Streak' },
-              { rank: '02', name: 'Elena Rostova', points: '1,320 pts', streak: '25 Day Streak' },
-              { rank: '03', name: 'David Chen', points: '1,280 pts', streak: '24 Day Streak' },
-            ].map((p) => (
-              <div key={p.rank} className="flex items-center justify-between text-xs py-1">
+            {(topUsers && topUsers.length > 0 ? topUsers : []).map((p, index) => (
+              <div key={p.id} className="flex items-center justify-between text-xs py-1">
                 <div className="flex items-center gap-3">
-                  <span className="font-mono font-bold text-orange-400">{p.rank}</span>
+                  <span className="font-mono font-bold text-orange-400">
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
                   <div>
-                    <p className="font-semibold text-white">{p.name}</p>
-                    <p className="text-[10px] text-zinc-500">{p.streak}</p>
+                    <p className="font-semibold text-white">{p.full_name || p.username || 'Activation User'}</p>
+                    <p className="text-[10px] text-zinc-500">{p.streak || 0} Day Streak</p>
                   </div>
                 </div>
-                <span className="font-mono text-zinc-300 font-semibold">{p.points}</span>
+                <span className="font-mono text-zinc-300 font-semibold">
+                  {(p.points || 0).toLocaleString()} pts
+                </span>
               </div>
             ))}
           </div>
