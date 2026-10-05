@@ -185,16 +185,20 @@ export async function submitDailyChallengeServer(
   // Cap max points at 100
   pointsEarned = Math.min(100, Math.max(0, pointsEarned));
 
-  // 3. Insert into daily_submissions
+  // 3. Upsert into daily_submissions
+  // Using a per-day UUID derived from day_number to avoid the unique constraint
+  // collision when all days share the same dummy challenge_id / challenge_day_id.
   const reflectionData = JSON.stringify(payload);
-  const dummyDayId = '00000000-0000-0000-0000-000000000000'; // fallback placeholder uuid if challenge_days table is not linked directly
+  const dummyChallengeId = '00000000-0000-0000-0000-000000000000';
+  // Build a deterministic UUID per day: 00000000-0000-0000-0000-<day padded to 12 digits>
+  const perDayId = `00000000-0000-0000-0000-${String(activeDayNumber).padStart(12, '0')}`;
 
   const todayDateStr = new Date().toISOString().split('T')[0];
-  const { error: subError } = await supabase.from('daily_submissions').insert({
+  const { error: subError } = await supabase.from('daily_submissions').upsert({
     user_id: userId,
-    challenge_id: dummyDayId,
-    challenge_day_id: dummyDayId,
-    day_id: dummyDayId,
+    challenge_id: dummyChallengeId,
+    challenge_day_id: perDayId,
+    day_id: perDayId,
     day_number: activeDayNumber,
     action_completed: true,
     reflection_text: reflectionData,
@@ -202,7 +206,9 @@ export async function submitDailyChallengeServer(
     activity_date: todayDateStr,
     submitted_at: new Date().toISOString(),
     created_at: new Date().toISOString(),
-  } as any);
+  } as any, {
+    onConflict: 'user_id,challenge_id,challenge_day_id',
+  });
 
   if (subError) {
     console.error('Failed to insert daily submission:', subError);
